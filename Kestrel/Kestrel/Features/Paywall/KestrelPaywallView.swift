@@ -80,6 +80,9 @@ struct KestrelPaywallView: View {
         } message: {
             Text(revenueCat.errorMessage ?? "Something went wrong")
         }
+        .onAppear {
+            Analytics.capture("paywall_shown")
+        }
     }
 
     // MARK: - Hero Section

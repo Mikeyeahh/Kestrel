@@ -155,6 +155,7 @@ final class SSHSession {
             self.client = sshClient
             self.state = .connected
             self.connectedAt = .now
+            Analytics.capture("ssh_session_started")
 
             // Handle unexpected disconnects
             sshClient.onDisconnect { [weak self] in

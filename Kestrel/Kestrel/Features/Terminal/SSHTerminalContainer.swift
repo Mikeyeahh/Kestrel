@@ -263,6 +263,7 @@ struct SSHTerminalContainer: View {
         modelContext.insert(entry)
         sessionLog?.commandCount += 1
         try? modelContext.save()
+        Analytics.capture("command_executed")
     }
 
     private func finaliseSessionLog() {

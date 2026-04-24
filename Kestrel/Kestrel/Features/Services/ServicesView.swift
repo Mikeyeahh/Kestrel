@@ -618,6 +618,8 @@ struct ServicesView: View {
         modelContext.insert(watched)
         try? modelContext.save()
 
+        Analytics.capture("service_monitor_added")
+
         actionResult = (
             service: service.name,
             message: "Added to watch list",

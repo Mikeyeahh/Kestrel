@@ -694,6 +694,8 @@ struct AddServerSheet: View {
             try? modelContext.save()
 
             savePassword(for: server.id)
+
+            Analytics.capture("server_added", ["protocol": connectionProtocol.rawValue])
         }
 
         dismiss()

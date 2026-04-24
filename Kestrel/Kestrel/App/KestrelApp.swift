@@ -16,6 +16,8 @@ struct KestrelApp: App {
     @StateObject private var supabaseService = SupabaseService.shared
 
     init() {
+        Analytics.configure()
+
         KestrelRevenueCatService.shared.configure(apiKey: "test_UmfgkdusfhbUIvqLMsTegxkELTI")
 
         ServiceMonitorTask.register()
