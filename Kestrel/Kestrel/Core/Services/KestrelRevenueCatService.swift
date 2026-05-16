@@ -83,7 +83,7 @@ enum KestrelFeature: String, CaseIterable {
 // MARK: - Free Tier Limits
 
 enum KestrelFreeLimits {
-    static let maxServers = 2
+    static let maxServers = 5
     static let maxKeys    = 3
 }
 

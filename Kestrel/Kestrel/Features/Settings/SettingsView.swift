@@ -133,7 +133,7 @@ struct SettingsView: View {
                         Text("Kestrel Free")
                             .font(KestrelFonts.monoBold(14))
                             .foregroundStyle(KestrelColors.textPrimary)
-                        Text("2 servers · 3 keys · Limited features")
+                        Text("\(KestrelFreeLimits.maxServers) servers · \(KestrelFreeLimits.maxKeys) keys · Limited features")
                             .font(KestrelFonts.mono(11))
                             .foregroundStyle(KestrelColors.textMuted)
                     }
