@@ -18,7 +18,7 @@ final class SSHServer {
     var jumpHostID: UUID?
     var group: String?
     var environment: ServerEnvironment = ServerEnvironment.other
-    var colour: String = "#00FF41"
+    var colour: String = "#00FF9C"
     var lastConnected: Date?
     var notes: String?
     var tags: [String] = []
@@ -40,7 +40,7 @@ final class SSHServer {
         jumpHostID: UUID? = nil,
         group: String? = nil,
         environment: ServerEnvironment = .other,
-        colour: String = "#00FF41",
+        colour: String = "#00FF9C",
         lastConnected: Date? = nil,
         notes: String? = nil,
         tags: [String] = [],

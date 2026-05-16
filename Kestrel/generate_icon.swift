@@ -14,12 +14,12 @@ guard let ctx = CGContext(data: nil, width: size, height: size, bitsPerComponent
 
 ctx.translateBy(x: 0, y: h); ctx.scaleBy(x: 1, y: -1)
 
-// ── Black background ──
-ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+// ── Dark Navy background ──
+ctx.setFillColor(CGColor(red: 0.031, green: 0.047, blue: 0.078, alpha: 1))
 ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
 
 // ── Radial glow ──
-let gc: [CGFloat] = [1.0,0.55,0.12,0.18, 0.60,0.30,0.05,0.04, 0,0,0,0]
+let gc: [CGFloat] = [0.0, 1.0, 0.612, 0.18, 0.0, 0.5, 0.3, 0.04, 0,0,0,0]
 if let g = CGGradient(colorSpace: cs, colorComponents: gc, locations: [0,0.5,1], count: 3) {
     ctx.saveGState(); ctx.translateBy(x: 0, y: h); ctx.scaleBy(x: 1, y: -1)
     ctx.drawRadialGradient(g, startCenter: CGPoint(x: w*0.50, y: h*0.56),
@@ -99,16 +99,11 @@ bird.addCurve(to: p(0.488, 0.215 + dy), control1: p(0.480, 0.238 + dy), control2
 bird.closeSubpath()
 
 // Fill bird
-ctx.setFillColor(CGColor(red: 1.0, green: 0.55, blue: 0.12, alpha: 1))
+ctx.setFillColor(CGColor(red: 0.0, green: 1.0, blue: 0.612, alpha: 1))
 ctx.addPath(bird); ctx.fillPath()
 
-// ── Eye ──
-let er: CGFloat = w*0.011
-ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
-ctx.fillEllipse(in: CGRect(x: w*0.507-er, y: h*(0.242+dy)-er, width: er*2, height: er*2))
-
 // ── Subtle wing line detail ──
-ctx.setStrokeColor(CGColor(red: 0.65, green: 0.35, blue: 0.08, alpha: 0.25))
+ctx.setStrokeColor(CGColor(red: 0.0, green: 0.8, blue: 0.5, alpha: 0.25))
 ctx.setLineWidth(1.2)
 ctx.setLineCap(.round)
 
@@ -134,7 +129,7 @@ for i in 0..<3 {
 }
 
 // Tail barring
-ctx.setStrokeColor(CGColor(red: 0.65, green: 0.35, blue: 0.08, alpha: 0.2))
+ctx.setStrokeColor(CGColor(red: 0.0, green: 0.8, blue: 0.5, alpha: 0.2))
 for i in 0..<3 {
     let ty = 0.62 + CGFloat(i)*0.035 + dy
     let tw = 0.035 + CGFloat(i)*0.008
@@ -148,20 +143,6 @@ for i in 0..<3 {
 ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.03))
 var sy: CGFloat = 0
 while sy < h { ctx.fill(CGRect(x: 0, y: sy, width: w, height: 1)); sy += 3 }
-
-// ── "KESTREL" text ──
-let font = CTFontCreateWithName("Menlo-Regular" as CFString, w*0.040, nil)
-let attrs: [NSAttributedString.Key: Any] = [
-    NSAttributedString.Key(rawValue: kCTFontAttributeName as String): font,
-    NSAttributedString.Key(rawValue: kCTForegroundColorAttributeName as String):
-        CGColor(red: 1.0, green: 0.55, blue: 0.12, alpha: 0.50),
-    NSAttributedString.Key(rawValue: kCTKernAttributeName as String): w * 0.016
-]
-let line = CTLineCreateWithAttributedString(NSAttributedString(string: "KESTREL", attributes: attrs))
-let tb = CTLineGetBoundsWithOptions(line, [])
-ctx.saveGState(); ctx.translateBy(x: 0, y: h); ctx.scaleBy(x: 1, y: -1)
-ctx.textPosition = CGPoint(x: (w-tb.width)/2 - tb.origin.x, y: h*0.095)
-CTLineDraw(line, ctx); ctx.restoreGState()
 
 // ── Export ──
 guard let img = ctx.makeImage() else { exit(1) }

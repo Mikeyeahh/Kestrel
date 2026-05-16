@@ -27,17 +27,17 @@ struct LaunchScreenView: View {
                 Text("◈ KESTREL")
                     .font(.system(size: 28, weight: .medium, design: .monospaced))
                     .tracking(4)
-                    .foregroundStyle(Color(red: 0, green: 1, blue: 0.255))
+                    .foregroundStyle(Color(red: 0, green: 1, blue: 0.612))
 
                 Text("█")
                     .font(.system(size: 16, design: .monospaced))
-                    .foregroundStyle(Color(red: 0, green: 1, blue: 0.255))
+                    .foregroundStyle(Color(red: 0, green: 1, blue: 0.612))
                     .opacity(cursorVisible ? 1.0 : 0.0)
 
                 Text("SSH · MONITOR · MANAGE")
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .tracking(2)
-                    .foregroundStyle(Color(red: 0, green: 1, blue: 0.255).opacity(0.3))
+                    .foregroundStyle(Color(red: 0, green: 1, blue: 0.612).opacity(0.3))
                     .padding(.top, 8)
             }
         }
@@ -146,15 +146,25 @@ struct RootSyncWrapper: View {
                 print("[iOS Sync] Auth: \(supabaseService.isAuthenticated), email: \(supabaseService.userEmail ?? "nil")")
 
                 if supabaseService.isAuthenticated {
-                    let repo = ServerRepository(modelContext: modelContext)
-                    syncRepo = repo
-                    await repo.loadFromCloud()
-                    print("[iOS Sync] loadFromCloud complete, starting auto sync")
-                    repo.startAutoSync()
+                    await startSync()
                 } else {
-                    print("[iOS Sync] Skipped — not authenticated")
+                    print("[iOS Sync] Skipped — not authenticated, awaiting sign-in")
                 }
             }
+            .onChange(of: supabaseService.isAuthenticated) { _, isAuthed in
+                if isAuthed && syncRepo == nil {
+                    print("[iOS Sync] Auth flipped to true, starting sync")
+                    Task { await startSync() }
+                }
+            }
+    }
+
+    private func startSync() async {
+        let repo = ServerRepository(modelContext: modelContext)
+        syncRepo = repo
+        await repo.loadFromCloud()
+        print("[iOS Sync] loadFromCloud complete, starting auto sync")
+        repo.startAutoSync()
     }
 }
 
@@ -214,7 +224,12 @@ struct RootView: View {
         .onOpenURL { url in
             print("[KESTREL DEEPLINK] Received URL: \(url)")
             print("[KESTREL DEEPLINK] Scheme: \(url.scheme ?? "nil"), Host: \(url.host ?? "nil"), Query: \(url.query ?? "nil")")
-            if let action = ospreyBridge.handleDeepLink(url) {
+            
+            if url.host == "auth" {
+                Task {
+                    await supabaseService.handleAuthCallback(url)
+                }
+            } else if let action = ospreyBridge.handleDeepLink(url) {
                 print("[KESTREL DEEPLINK] Parsed action: \(action)")
                 router.handle(action)
                 print("[KESTREL DEEPLINK] Router pendingImportHost: \(router.pendingImportHost ?? "nil"), selectedTab: \(router.selectedTab)")

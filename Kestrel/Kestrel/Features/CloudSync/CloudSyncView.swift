@@ -53,6 +53,21 @@ struct CloudSyncView: View {
                 Task { try? await supabaseService.fetchDevices() }
             }
         }
+        .alert(
+            "Authentication",
+            isPresented: Binding(
+                get: { supabaseService.authSuccessMessage != nil },
+                set: { if !$0 { supabaseService.authSuccessMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                supabaseService.authSuccessMessage = nil
+            }
+        } message: {
+            if let message = supabaseService.authSuccessMessage {
+                Text(message)
+            }
+        }
     }
 
     // MARK: - Sign In Section

@@ -20,6 +20,9 @@ final class TerminalPreferences {
     var colorScheme: TerminalColorScheme {
         didSet { UserDefaults.standard.set(colorScheme.rawValue, forKey: "terminal_color_scheme") }
     }
+    var matchAppTheme: Bool {
+        didSet { UserDefaults.standard.set(matchAppTheme, forKey: "terminal_match_app_theme") }
+    }
 
     private init() {
         let storedSize = UserDefaults.standard.double(forKey: "terminal_font_size")
@@ -29,6 +32,17 @@ final class TerminalPreferences {
 
         let storedScheme = UserDefaults.standard.string(forKey: "terminal_color_scheme") ?? ""
         self.colorScheme = TerminalColorScheme(rawValue: storedScheme) ?? .kestrel
+
+        // Default new installs to "match app theme"; preserve explicit choice for existing users.
+        if UserDefaults.standard.object(forKey: "terminal_match_app_theme") == nil {
+            self.matchAppTheme = (storedScheme.isEmpty)
+        } else {
+            self.matchAppTheme = UserDefaults.standard.bool(forKey: "terminal_match_app_theme")
+        }
+    }
+
+    func effectiveColorScheme(appThemeID: AppThemeID) -> TerminalColorScheme {
+        matchAppTheme ? .forAppTheme(appThemeID) : colorScheme
     }
 }
 
@@ -38,6 +52,20 @@ enum TerminalColorScheme: String, CaseIterable {
     case amber = "Amber"
     case solarized = "Solarized Dark"
     case dracula = "Dracula"
+    case midnight = "Midnight"
+    case arctic = "Arctic"
+    case mono = "Mono"
+
+    static func forAppTheme(_ id: AppThemeID) -> TerminalColorScheme {
+        switch id {
+        case .phosphor: .kestrel
+        case .dracula:  .dracula
+        case .midnight: .midnight
+        case .arctic:   .arctic
+        case .ember:    .amber
+        case .mono:     .mono
+        }
+    }
 
     var foreground: (CGFloat, CGFloat, CGFloat) {
         switch self {
@@ -46,6 +74,9 @@ enum TerminalColorScheme: String, CaseIterable {
         case .amber: (1, 0.722, 0)
         case .solarized: (0.514, 0.580, 0.588)
         case .dracula: (0.973, 0.973, 0.949)
+        case .midnight: (0.85, 0.90, 1.0)
+        case .arctic: (0.78, 0.92, 1.0)
+        case .mono: (1, 1, 1)
         }
     }
 
@@ -56,6 +87,9 @@ enum TerminalColorScheme: String, CaseIterable {
         case .amber: (0.05, 0.03, 0)
         case .solarized: (0, 0.169, 0.212)
         case .dracula: (0.157, 0.165, 0.212)
+        case .midnight: (0.039, 0.055, 0.102)
+        case .arctic: (0.039, 0.086, 0.157)
+        case .mono: (0, 0, 0)
         }
     }
 
@@ -97,6 +131,27 @@ enum TerminalColorScheme: String, CaseIterable {
                 (0x62, 0x72, 0xA4), (0xFF, 0x6E, 0x6E), (0x69, 0xFF, 0x94), (0xFF, 0xFB, 0xA6),
                 (0xD6, 0xAC, 0xFF), (0xFF, 0x92, 0xDF), (0xA4, 0xFF, 0xFF), (0xFF, 0xFF, 0xFF),
             ]
+        case .midnight:
+            [
+                (0x0A, 0x0E, 0x1A), (0xFF, 0x3B, 0x5C), (0x66, 0xCC, 0x88), (0xFF, 0xB8, 0x00),
+                (0x5B, 0x9C, 0xFF), (0xA8, 0x8B, 0xFF), (0x66, 0xD9, 0xEF), (0xCC, 0xD6, 0xE5),
+                (0x3A, 0x4A, 0x66), (0xFF, 0x6B, 0x82), (0x88, 0xE0, 0xA8), (0xFF, 0xD7, 0x4D),
+                (0x88, 0xC0, 0xFF), (0xC4, 0xAE, 0xFF), (0x99, 0xE8, 0xF5), (0xFF, 0xFF, 0xFF),
+            ]
+        case .arctic:
+            [
+                (0x0A, 0x16, 0x28), (0xFF, 0x5C, 0x6B), (0x66, 0xE0, 0xC8), (0xFF, 0xC8, 0x4D),
+                (0x00, 0xD4, 0xFF), (0x99, 0xC8, 0xFF), (0x4D, 0xE8, 0xE8), (0xD6, 0xE8, 0xF5),
+                (0x3A, 0x5A, 0x7A), (0xFF, 0x8B, 0x99), (0x99, 0xF0, 0xDD), (0xFF, 0xDC, 0x88),
+                (0x66, 0xE4, 0xFF), (0xBB, 0xDC, 0xFF), (0x88, 0xF5, 0xF5), (0xFF, 0xFF, 0xFF),
+            ]
+        case .mono:
+            [
+                (0x00, 0x00, 0x00), (0xBB, 0xBB, 0xBB), (0xCC, 0xCC, 0xCC), (0xDD, 0xDD, 0xDD),
+                (0xAA, 0xAA, 0xAA), (0xBB, 0xBB, 0xBB), (0xCC, 0xCC, 0xCC), (0xEE, 0xEE, 0xEE),
+                (0x55, 0x55, 0x55), (0xFF, 0xFF, 0xFF), (0xFF, 0xFF, 0xFF), (0xFF, 0xFF, 0xFF),
+                (0xFF, 0xFF, 0xFF), (0xFF, 0xFF, 0xFF), (0xFF, 0xFF, 0xFF), (0xFF, 0xFF, 0xFF),
+            ]
         }
     }
 }
@@ -106,8 +161,13 @@ enum TerminalColorScheme: String, CaseIterable {
 struct TerminalSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var prefs = TerminalPreferences.shared
+    @AppStorage("app.theme") private var appThemeRaw = AppThemeID.phosphor.rawValue
 
     @State private var apiKey: String = UserDefaults.standard.string(forKey: "claude_api_key") ?? ""
+
+    private var resolvedScheme: TerminalColorScheme {
+        prefs.effectiveColorScheme(appThemeID: AppThemeID(rawValue: appThemeRaw) ?? .phosphor)
+    }
 
     var body: some View {
         NavigationStack {
@@ -197,8 +257,8 @@ struct TerminalSettingsSheet: View {
             )
 
             // Font preview — reflects the active color scheme
-            let previewFg = prefs.colorScheme.foreground
-            let previewBg = prefs.colorScheme.background
+            let previewFg = resolvedScheme.foreground
+            let previewBg = resolvedScheme.background
             Text("user@server:~$ ls -la /var/log")
                 .font(.system(size: prefs.fontSize, weight: .regular, design: .monospaced))
                 .foregroundStyle(Color(red: previewFg.0, green: previewFg.1, blue: previewFg.2))
@@ -219,10 +279,57 @@ struct TerminalSettingsSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel(text: "Colour Scheme")
 
-            ForEach(TerminalColorScheme.allCases, id: \.self) { scheme in
-                colorSchemeRow(scheme)
+            matchAppThemeRow
+
+            if !prefs.matchAppTheme {
+                ForEach(TerminalColorScheme.allCases, id: \.self) { scheme in
+                    colorSchemeRow(scheme)
+                }
             }
         }
+    }
+
+    private var matchAppThemeRow: some View {
+        Button {
+            prefs.matchAppTheme.toggle()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "paintpalette.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(KestrelColors.phosphorGreen)
+                    .frame(width: 44, height: 30)
+                    .background(KestrelColors.backgroundCard)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Match App Theme")
+                        .font(KestrelFonts.mono(12))
+                        .foregroundStyle(KestrelColors.textPrimary)
+                    Text("Follows your selected app theme")
+                        .font(KestrelFonts.mono(10))
+                        .foregroundStyle(KestrelColors.textFaint)
+                }
+
+                Spacer()
+
+                if prefs.matchAppTheme {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(KestrelColors.phosphorGreen)
+                }
+            }
+            .padding(10)
+            .background(prefs.matchAppTheme ? KestrelColors.phosphorGreenDim : KestrelColors.backgroundCard)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(
+                        prefs.matchAppTheme ? KestrelColors.cardBorderGreen : KestrelColors.cardBorder,
+                        lineWidth: 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - AI Section

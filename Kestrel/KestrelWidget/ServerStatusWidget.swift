@@ -65,7 +65,7 @@ struct ServerStatusProvider: AppIntentTimelineProvider {
     }
 
     private func loadServers() -> [WidgetServerData] {
-        guard let data = UserDefaults(suiteName: "group.suite.osprey-kestrel")?.data(forKey: "kestrel.widget.serverData"),
+        guard let data = UserDefaults(suiteName: "group.com.getosprey.suite")?.data(forKey: "kestrel.widget.serverData"),
               let servers = try? JSONDecoder().decode([WidgetServerData].self, from: data) else {
             return []
         }

@@ -15,12 +15,12 @@ struct KestrelAppIconView: View {
 
     var body: some View {
         ZStack {
-            Color.black
+            Color(red: 0.031, green: 0.047, blue: 0.078)
 
             RadialGradient(
                 colors: [
-                    Color(red: 1.0, green: 0.55, blue: 0.12).opacity(0.18),
-                    Color(red: 0.60, green: 0.30, blue: 0.05).opacity(0.04),
+                    Color(red: 0.0, green: 1.0, blue: 0.612).opacity(0.18),
+                    Color(red: 0.0, green: 0.5, blue: 0.3).opacity(0.04),
                     Color.clear
                 ],
                 center: .center,
@@ -29,21 +29,13 @@ struct KestrelAppIconView: View {
             )
 
             KestrelBirdShape()
-                .fill(Color(red: 1.0, green: 0.55, blue: 0.12))
+                .fill(Color(red: 0.0, green: 1.0, blue: 0.612))
                 .frame(width: size * 0.92, height: size * 0.56)
                 .offset(y: size * 0.04)
 
             ScanlineOverlay()
                 .opacity(0.03)
 
-            VStack {
-                Spacer()
-                Text("KESTREL")
-                    .font(.system(size: size * 0.065, weight: .medium, design: .monospaced))
-                    .tracking(size * 0.018)
-                    .foregroundStyle(Color(red: 1.0, green: 0.55, blue: 0.12).opacity(0.55))
-                    .padding(.bottom, size * 0.07)
-            }
         }
         .frame(width: size, height: size)
         .clipped()

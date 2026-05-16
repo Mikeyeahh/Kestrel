@@ -24,6 +24,8 @@ struct ServersView: View {
     @State private var showingOspreyImport = false
     @State private var router = NavigationRouter.shared
     @State private var importPrefillHost: String?
+    @State private var revenueCat = KestrelRevenueCatService.shared
+    @State private var showingPaywall = false
 
     // Group management
     @State private var showingNewGroup = false
@@ -73,6 +75,9 @@ struct ServersView: View {
                         serverToEdit = nil
                         importPrefillHost = nil
                     }
+            }
+            .sheet(isPresented: $showingPaywall) {
+                KestrelPaywallView()
             }
             .sheet(isPresented: $showingOspreyImport) {
                 ImportFromOspreySheet(discoveredHosts: ospreyBridge.discoveredHosts)
@@ -423,25 +428,38 @@ struct ServersView: View {
 
     // MARK: - Server Row
 
+    /// Returns the global index (0-based) of a server in the sorted list.
+    private func globalIndex(of server: SSHServer) -> Int {
+        servers.firstIndex(where: { $0.id == server.id }) ?? 0
+    }
+
     @ViewBuilder
     private func serverRow(_ server: SSHServer) -> some View {
         let session = sessionManager.activeSession(for: server.id)
         let status = serverStatus(for: server)
         let cpuUsage = cpuUsage(for: server)
+        let locked = revenueCat.isServerLocked(at: globalIndex(of: server))
 
         Button {
-            selectedServerID = server.id
+            if locked {
+                showingPaywall = true
+            } else {
+                selectedServerID = server.id
+            }
         } label: {
             ServerRowCard(
                 server: server,
                 status: status,
                 cpuUsage: cpuUsage,
-                isConnecting: connectingServerID == server.id
+                isConnecting: connectingServerID == server.id,
+                isLocked: locked
             )
         }
         .buttonStyle(.plain)
         .contextMenu {
-            contextMenuItems(for: server, session: session)
+            if !locked {
+                contextMenuItems(for: server, session: session)
+            }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
@@ -451,12 +469,14 @@ struct ServersView: View {
             }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            Button {
-                connectToServer(server)
-            } label: {
-                Label("Connect", systemImage: "bolt.fill")
+            if !locked {
+                Button {
+                    connectToServer(server)
+                } label: {
+                    Label("Connect", systemImage: "bolt.fill")
+                }
+                .tint(Color(red: 0, green: 0.7, blue: 0.2))
             }
-            .tint(Color(red: 0, green: 0.7, blue: 0.2))
         }
         .transition(.asymmetric(
             insertion: .move(edge: .top).combined(with: .opacity),
@@ -834,12 +854,17 @@ struct ServerRowCard: View {
     let status: ServerStatus
     let cpuUsage: Double
     let isConnecting: Bool
+    var isLocked: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Top row: status, name, env badge
             HStack(spacing: 8) {
-                if isConnecting {
+                if isLocked {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(KestrelColors.amber)
+                } else if isConnecting {
                     ProgressView()
                         .scaleEffect(0.5)
                         .frame(width: 8, height: 8)
@@ -849,16 +874,30 @@ struct ServerRowCard: View {
 
                 Text(server.name)
                     .font(KestrelFonts.monoBold(14))
-                    .foregroundStyle(KestrelColors.textPrimary)
+                    .foregroundStyle(isLocked ? KestrelColors.textMuted : KestrelColors.textPrimary)
                     .lineLimit(1)
 
-                Image(systemName: server.port == 23 ? "terminal" : "lock.shield")
-                    .font(.system(size: 10))
-                    .foregroundStyle(server.port == 23 ? KestrelColors.amber : KestrelColors.textFaint)
+                if !isLocked {
+                    Image(systemName: server.port == 23 ? "terminal" : "lock.shield")
+                        .font(.system(size: 10))
+                        .foregroundStyle(server.port == 23 ? KestrelColors.amber : KestrelColors.textFaint)
+                }
 
                 Spacer()
 
-                EnvBadge(env: server.environment)
+                if isLocked {
+                    Text("PRO")
+                        .font(KestrelFonts.mono(8))
+                        .fontWeight(.bold)
+                        .tracking(0.8)
+                        .foregroundStyle(KestrelColors.background)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(KestrelColors.amber)
+                        .clipShape(Capsule())
+                } else {
+                    EnvBadge(env: server.environment)
+                }
             }
 
             // Middle row: host and stats
@@ -871,7 +910,7 @@ struct ServerRowCard: View {
 
                 Spacer()
 
-                if status == .online {
+                if !isLocked && status == .online {
                     Text("\(Int(cpuUsage * 100))%")
                         .font(KestrelFonts.mono(11))
                         .foregroundStyle(cpuBarColor)
@@ -879,24 +918,27 @@ struct ServerRowCard: View {
             }
 
             // Bot row: CPU bar
-            HStack(spacing: 6) {
-                Text("CPU")
-                    .font(KestrelFonts.mono(9))
-                    .foregroundStyle(KestrelColors.textFaint)
+            if !isLocked {
+                HStack(spacing: 6) {
+                    Text("CPU")
+                        .font(KestrelFonts.mono(9))
+                        .foregroundStyle(KestrelColors.textFaint)
 
-                MiniBar(
-                    progress: cpuUsage,
-                    color: cpuBarColor
-                )
+                    MiniBar(
+                        progress: cpuUsage,
+                        color: cpuBarColor
+                    )
+                }
             }
         }
         .padding(12)
-        .background(cardBackground)
+        .background(isLocked ? KestrelColors.backgroundCard.opacity(0.5) : cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(cardBorderColor, lineWidth: 1)
+                .strokeBorder(isLocked ? KestrelColors.amber.opacity(0.15) : cardBorderColor, lineWidth: 1)
         )
+        .opacity(isLocked ? 0.7 : 1)
     }
 
     private var cpuBarColor: Color {

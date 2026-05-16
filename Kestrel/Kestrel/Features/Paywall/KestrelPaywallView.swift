@@ -29,9 +29,9 @@ struct KestrelPaywallView: View {
     @State private var purchaseSucceeded = false
 
     var body: some View {
-        NavigationStack {
+        ZStack(alignment: .topLeading) {
             ScrollView {
-                VStack(spacing: 28) {
+                VStack(spacing: 20) {
                     // Hero
                     heroSection
 
@@ -55,21 +55,23 @@ struct KestrelPaywallView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 40)
             }
-            .background(KestrelColors.background)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundStyle(KestrelColors.textFaint)
-                    }
-                }
+
+            // Dismiss button (top-left, no nav bar)
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(KestrelColors.textFaint)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
-            .toolbarBackground(KestrelColors.background, for: .navigationBar)
+            .buttonStyle(.plain)
+            .padding(.leading, 8)
+            .padding(.top, 4)
+            .zIndex(1)
         }
+        .background(KestrelColors.background)
         .alert("Purchase Successful", isPresented: $purchaseSucceeded) {
             Button("Done") { dismiss() }
         } message: {
@@ -88,18 +90,18 @@ struct KestrelPaywallView: View {
     // MARK: - Hero Section
 
     private var heroSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             // Icon
             ZStack {
                 Circle()
                     .fill(KestrelColors.phosphorGreenDim)
-                    .frame(width: 80, height: 80)
+                    .frame(width: 64, height: 64)
 
                 Text("◈")
-                    .font(.system(size: 36))
+                    .font(.system(size: 30))
                     .foregroundStyle(KestrelColors.phosphorGreen)
             }
-            .padding(.top, 20)
+            .padding(.top, 4)
 
             Text("KESTREL PRO")
                 .font(KestrelFonts.mono(14))
@@ -176,7 +178,8 @@ struct KestrelPaywallView: View {
                 type: .monthly,
                 label: "Monthly",
                 price: revenueCat.monthlyProduct?.localizedPriceString ?? "£3.99",
-                period: "/mo"
+                period: "/mo",
+                product: revenueCat.monthlyProduct
             )
 
             planCard(
@@ -184,14 +187,16 @@ struct KestrelPaywallView: View {
                 label: "Yearly",
                 price: revenueCat.yearlyProduct?.localizedPriceString ?? "£24.99",
                 period: "/yr",
-                badge: "BEST VALUE"
+                badge: "BEST VALUE",
+                product: revenueCat.yearlyProduct
             )
 
             planCard(
                 type: .lifetime,
                 label: "Lifetime",
                 price: revenueCat.lifetimeProduct?.localizedPriceString ?? "£49.99",
-                period: "once"
+                period: "once",
+                product: revenueCat.lifetimeProduct
             )
         }
     }
@@ -201,9 +206,12 @@ struct KestrelPaywallView: View {
         label: String,
         price: String,
         period: String,
-        badge: String? = nil
+        badge: String? = nil,
+        product: StoreProduct? = nil
     ) -> some View {
         let isSelected = selectedPlan == type
+        let introOffer = product?.introductoryDiscount
+        let hasTrial = introOffer?.type == .introductory && introOffer?.price == 0
 
         return Button {
             withAnimation(.snappy(duration: 0.15)) {
@@ -213,6 +221,16 @@ struct KestrelPaywallView: View {
             VStack(spacing: 8) {
                 if let badge {
                     Text(badge)
+                        .font(KestrelFonts.mono(7))
+                        .fontWeight(.bold)
+                        .tracking(0.5)
+                        .foregroundStyle(KestrelColors.background)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(KestrelColors.phosphorGreen)
+                        .clipShape(Capsule())
+                } else if hasTrial {
+                    Text("FREE TRIAL")
                         .font(KestrelFonts.mono(7))
                         .fontWeight(.bold)
                         .tracking(0.5)
@@ -234,9 +252,15 @@ struct KestrelPaywallView: View {
                     .font(KestrelFonts.display(18, weight: .bold))
                     .foregroundStyle(isSelected ? KestrelColors.phosphorGreen : KestrelColors.textPrimary)
 
-                Text(period)
-                    .font(KestrelFonts.mono(9))
-                    .foregroundStyle(KestrelColors.textFaint)
+                if hasTrial, let intro = introOffer {
+                    Text("\(intro.subscriptionPeriod.periodTitle) free")
+                        .font(KestrelFonts.mono(9))
+                        .foregroundStyle(KestrelColors.phosphorGreen)
+                } else {
+                    Text(period)
+                        .font(KestrelFonts.mono(9))
+                        .foregroundStyle(KestrelColors.textFaint)
+                }
             }
             .padding(.vertical, 14)
             .padding(.horizontal, 8)
@@ -323,26 +347,56 @@ struct KestrelPaywallView: View {
 
     // MARK: - Purchase Button
 
-    private var purchaseButton: some View {
-        Button {
-            Task { await performPurchase() }
-        } label: {
-            HStack(spacing: 8) {
-                if isPurchasing {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                        .tint(KestrelColors.background)
-                }
-                Text(isPurchasing ? "Processing…" : "Continue with \(selectedPlan.rawValue)")
-                    .font(KestrelFonts.monoBold(14))
-            }
-            .foregroundStyle(KestrelColors.background)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(KestrelColors.phosphorGreen)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+    private var selectedProduct: StoreProduct? {
+        switch selectedPlan {
+        case .monthly:  return revenueCat.monthlyProduct
+        case .yearly:   return revenueCat.yearlyProduct
+        case .lifetime: return revenueCat.lifetimeProduct
         }
-        .disabled(isPurchasing)
+    }
+
+    private var purchaseButtonLabel: String {
+        guard !isPurchasing else { return "Processing…" }
+        let intro = selectedProduct?.introductoryDiscount
+        if intro?.type == .introductory, intro?.price == 0,
+           let period = intro?.subscriptionPeriod.periodTitle {
+            return "Start \(period) Free Trial"
+        }
+        return "Continue with \(selectedPlan.rawValue)"
+    }
+
+    private var purchaseButton: some View {
+        VStack(spacing: 6) {
+            Button {
+                Task { await performPurchase() }
+            } label: {
+                HStack(spacing: 8) {
+                    if isPurchasing {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                            .tint(KestrelColors.background)
+                    }
+                    Text(purchaseButtonLabel)
+                        .font(KestrelFonts.monoBold(14))
+                }
+                .foregroundStyle(KestrelColors.background)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(KestrelColors.phosphorGreen)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .disabled(isPurchasing)
+
+            // Show "then £X.XX/period" subtext when a free trial is active
+            if let intro = selectedProduct?.introductoryDiscount,
+               intro.type == .introductory, intro.price == 0,
+               let price = selectedProduct?.localizedPriceString,
+               let period = selectedProduct?.subscriptionPeriod?.periodTitle {
+                Text("Then \(price)/\(period) — cancel anytime")
+                    .font(KestrelFonts.mono(10))
+                    .foregroundStyle(KestrelColors.textFaint)
+            }
+        }
     }
 
     // MARK: - Footer
@@ -509,5 +563,21 @@ struct ProBadge: View {
             .padding(.vertical, 2)
             .background(KestrelColors.phosphorGreen)
             .clipShape(Capsule())
+    }
+}
+
+// MARK: - SubscriptionPeriod Helper
+
+private extension SubscriptionPeriod {
+    /// Human-readable title, e.g. "7-Day", "1-Month", "1-Year".
+    var periodTitle: String {
+        let count = value
+        switch unit {
+        case .day:   return count == 7 ? "7-Day" : "\(count)-Day"
+        case .week:  return "\(count)-Week"
+        case .month: return count == 1 ? "1-Month" : "\(count)-Month"
+        case .year:  return count == 1 ? "1-Year" : "\(count)-Year"
+        @unknown default: return "\(count) periods"
+        }
     }
 }

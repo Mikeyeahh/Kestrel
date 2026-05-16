@@ -768,7 +768,7 @@ struct SettingsView: View {
                 HStack {
                     settingsLabel(icon: "info.circle", text: "Version")
                     Spacer()
-                    Text("\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"))")
+                    Text("\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1")")
                         .font(KestrelFonts.mono(12))
                         .foregroundStyle(KestrelColors.textMuted)
                 }

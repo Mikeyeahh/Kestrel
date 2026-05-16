@@ -39,7 +39,7 @@ struct FleetOverviewProvider: TimelineProvider {
     }
 
     private func loadServers() -> [WidgetServerData] {
-        guard let data = UserDefaults(suiteName: "group.suite.osprey-kestrel")?.data(forKey: "kestrel.widget.serverData"),
+        guard let data = UserDefaults(suiteName: "group.com.getosprey.suite")?.data(forKey: "kestrel.widget.serverData"),
               let servers = try? JSONDecoder().decode([WidgetServerData].self, from: data) else {
             return []
         }
@@ -61,7 +61,7 @@ struct FleetOverviewWidgetView: View {
             HStack {
                 Text("◈ FLEET")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(Color(red: 0, green: 1, blue: 0.255))
+                    .foregroundStyle(Color(red: 0, green: 1, blue: 0.612))
 
                 Spacer()
 

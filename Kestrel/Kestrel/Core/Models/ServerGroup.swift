@@ -10,13 +10,13 @@ import SwiftData
 final class ServerGroup {
     var id: UUID = UUID()
     var name: String = ""
-    var colour: String = "#00FF41"
+    var colour: String = "#00FF9C"
     var orderIndex: Int = 0
 
     init(
         id: UUID = UUID(),
         name: String,
-        colour: String = "#00FF41",
+        colour: String = "#00FF9C",
         orderIndex: Int = 0
     ) {
         self.id = id

@@ -8,7 +8,7 @@
 //  1. File → New → Target → Widget Extension
 //  2. Name: "KestrelWidget"
 //  3. Include Configuration App Intent: Yes
-//  4. App Group: group.suite.osprey-kestrel
+//  4. App Group: group.com.getosprey.suite
 //  5. Replace generated files with these source files
 //
 

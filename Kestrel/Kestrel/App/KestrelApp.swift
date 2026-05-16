@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftData
 
 /// Shared App Group container for credential sharing with OSPREY.
-let kestrelAppGroup = "group.suite.osprey-kestrel"
+let kestrelAppGroup = "group.com.getosprey.suite"
 
 @main
 struct KestrelApp: App {
@@ -18,7 +18,7 @@ struct KestrelApp: App {
     init() {
         Analytics.configure()
 
-        KestrelRevenueCatService.shared.configure(apiKey: "test_UmfgkdusfhbUIvqLMsTegxkELTI")
+        KestrelRevenueCatService.shared.configure(apiKey: "appl_NrjcEYMRTSJeVklytqRaAFhQcPm")
 
         ServiceMonitorTask.register()
         ServiceMonitorTask.configureNotificationCategories()

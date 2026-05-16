@@ -87,6 +87,14 @@ enum KestrelFreeLimits {
     static let maxKeys    = 3
 }
 
+// MARK: - Developer Override
+
+/// Emails that automatically receive Pro access (the developer!).
+private let kestrelDeveloperEmails: Set<String> = [
+    // Add your Supabase login email here (lowercased)
+    "totaladdictionxx@me.com"
+]
+
 // MARK: - RevenueCat Service
 
 @Observable
@@ -118,13 +126,27 @@ final class KestrelRevenueCatService {
     // MARK: - Computed
 
     var isProOrBundle: Bool {
-        isPro || hasSuiteBundle || proOverride
+        isPro || hasSuiteBundle || proOverride || isDeveloper
     }
+
+    /// True when the signed-in user matches a developer email.
+    private(set) var isDeveloper: Bool = false
 
     // MARK: - Init
 
     private init() {
         self.proOverride = UserDefaults.standard.bool(forKey: Self.proOverrideKey)
+    }
+
+    // MARK: - Developer Access
+
+    /// Call after Supabase auth restores to check if this is the developer.
+    func checkDeveloperAccess(email: String?) {
+        guard let email = email?.lowercased() else {
+            isDeveloper = false
+            return
+        }
+        isDeveloper = kestrelDeveloperEmails.contains(email)
     }
 
     // MARK: - Configure
@@ -271,6 +293,13 @@ final class KestrelRevenueCatService {
 
     func isAtKeyLimit(currentCount: Int) -> Bool {
         !isProOrBundle && currentCount >= KestrelFreeLimits.maxKeys
+    }
+
+    /// Returns true when a server at `index` (0-based, sorted by orderIndex)
+    /// exceeds the free-tier server limit and the user is not Pro.
+    /// Servers within the limit remain fully accessible even after a trial expires.
+    func isServerLocked(at index: Int) -> Bool {
+        !isProOrBundle && index >= KestrelFreeLimits.maxServers
     }
 
 }

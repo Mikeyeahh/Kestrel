@@ -23,6 +23,7 @@ struct SSHTerminalContainer: View {
     @State private var sessionManager = SSHSessionManager.shared
     @State private var recordingManager = SessionRecordingManager.shared
     @State private var prefs = TerminalPreferences.shared
+    @AppStorage("app.theme") private var appThemeRaw = AppThemeID.phosphor.rawValue
     @State private var revenueCat = KestrelRevenueCatService.shared
     @State private var showingShareSheet = false
     @State private var showingQuickCommands = false
@@ -51,7 +52,7 @@ struct SSHTerminalContainer: View {
                 tab: tab,
                 session: session,
                 fontSize: currentFontSize,
-                colorScheme: prefs.colorScheme,
+                colorScheme: prefs.effectiveColorScheme(appThemeID: AppThemeID(rawValue: appThemeRaw) ?? .phosphor),
                 dismissKeyboardID: keyboardDismissID,
                 onTranscriptUpdate: { text in
                     tab.transcript.append(text)

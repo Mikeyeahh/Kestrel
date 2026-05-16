@@ -60,7 +60,7 @@ struct SyncableServer: Identifiable, Codable {
         privateKeyID = try container.decodeIfPresent(UUID.self, forKey: .privateKeyID)
         group = try container.decodeIfPresent(String.self, forKey: .group)
         environment = try container.decodeIfPresent(String.self, forKey: .environment) ?? "other"
-        colour = try container.decodeIfPresent(String.self, forKey: .colour) ?? "#00FF41"
+        colour = try container.decodeIfPresent(String.self, forKey: .colour) ?? "#00FF9C"
         tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
         orderIndex = try container.decodeIfPresent(Int.self, forKey: .orderIndex) ?? 0
         notes = try container.decodeIfPresent(String.self, forKey: .notes)

@@ -90,6 +90,7 @@ class SupabaseService: ObservableObject {
     @Published var lastSyncDate: Date?
     @Published var connectedDevices: [ConnectedDevice] = []
     @Published var syncLog: [SyncLogEntry] = []
+    @Published var authSuccessMessage: String?
 
     // Sync counts
     @Published var syncedServerCount: Int = 0
@@ -110,6 +111,7 @@ class SupabaseService: ObservableObject {
             userEmail = session.user.email
             userId = session.user.id
             appendLog(action: "Session restored", detail: userEmail ?? "")
+            KestrelRevenueCatService.shared.checkDeveloperAccess(email: userEmail)
 
             // Auto-register this device and fetch the device list
             try? await registerDevice()
@@ -127,6 +129,7 @@ class SupabaseService: ObservableObject {
         userEmail = session.user.email
         userId = session.user.id
         appendLog(action: "Signed in", detail: email)
+        KestrelRevenueCatService.shared.checkDeveloperAccess(email: userEmail)
 
         // Register this device and pull the device list
         try? await registerDevice()
@@ -145,6 +148,7 @@ class SupabaseService: ObservableObject {
             userEmail = session.user.email
             userId = session.user.id
             appendLog(action: "Signed up", detail: email)
+            KestrelRevenueCatService.shared.checkDeveloperAccess(email: userEmail)
             return false
         } else {
             appendLog(action: "Sign up — check email", detail: email)
@@ -162,7 +166,28 @@ class SupabaseService: ObservableObject {
         syncedCommandCount = 0
         syncedKeyCount = 0
         syncedSessionCount = 0
+        KestrelRevenueCatService.shared.checkDeveloperAccess(email: nil)
         appendLog(action: "Signed out", detail: "")
+    }
+
+    func handleAuthCallback(_ url: URL) async {
+        do {
+            try await client.auth.session(from: url)
+            let session = try await client.auth.session
+            isAuthenticated = true
+            userEmail = session.user.email
+            userId = session.user.id
+            appendLog(action: "Session restored", detail: userEmail ?? "")
+            KestrelRevenueCatService.shared.checkDeveloperAccess(email: userEmail)
+            
+            // Auto-register this device and fetch the device list
+            try? await registerDevice()
+            try? await fetchDevices()
+            
+            authSuccessMessage = "Email verified! You have been logged in."
+        } catch {
+            authSuccessMessage = "Failed to verify email. Please try again."
+        }
     }
 
     // MARK: - Server Sync
@@ -335,6 +360,10 @@ class SupabaseService: ObservableObject {
             try await client.from("servers").delete().eq("user_id", value: userId.uuidString).execute()
             try await client.from("devices").delete().eq("user_id", value: userId.uuidString).execute()
         }
+        
+        // Fully delete the authentication identity from Supabase auth.users
+        try await client.rpc("delete_user").execute()
+        
         try await signOut()
     }
 

@@ -475,25 +475,29 @@ struct AddServerSheet: View {
             // Group picker
             fieldRow(label: "Group") {
                 VStack(spacing: 6) {
-                    HStack(spacing: 6) {
-                        groupChip(name: nil, label: "None")
-                        ForEach(groups) { group in
-                            groupChip(name: group.name, label: group.name)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            groupChip(name: nil, label: "None")
+                            ForEach(groups) { group in
+                                groupChip(name: group.name, label: group.name)
+                            }
+                            Button {
+                                showingNewGroup.toggle()
+                            } label: {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(KestrelColors.textMuted)
+                                    .frame(width: 32, height: 32)
+                                    .background(KestrelColors.backgroundCard)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .strokeBorder(KestrelColors.cardBorder, lineWidth: 1)
+                                    )
+                            }
+                            .buttonStyle(.plain)
                         }
-                        Button {
-                            showingNewGroup.toggle()
-                        } label: {
-                            Image(systemName: "plus")
-                                .font(.system(size: 11))
-                                .foregroundStyle(KestrelColors.textMuted)
-                                .frame(width: 32, height: 32)
-                                .background(KestrelColors.backgroundCard)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .strokeBorder(KestrelColors.cardBorder, lineWidth: 1)
-                                )
-                        }
+                        .padding(.vertical, 2)
                     }
 
                     if showingNewGroup {
@@ -527,6 +531,8 @@ struct AddServerSheet: View {
         } label: {
             Text(label)
                 .font(KestrelFonts.mono(11))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .foregroundStyle(
                     isSelected ? KestrelColors.phosphorGreen : KestrelColors.textMuted
                 )
