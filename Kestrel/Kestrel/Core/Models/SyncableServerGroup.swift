@@ -14,12 +14,15 @@ struct SyncableServerGroup: Identifiable, Codable {
     var name: String
     var colour: String
     var orderIndex: Int
+    /// Optional parent group id — groups form a tree when set.
+    var parentId: UUID?
 
     enum CodingKeys: String, CodingKey {
         case id
         case userId = "user_id"
         case name, colour
         case orderIndex = "order_index"
+        case parentId = "parent_id"
     }
 
     // MARK: - Convert from SwiftData model
@@ -29,6 +32,7 @@ struct SyncableServerGroup: Identifiable, Codable {
         self.name = group.name
         self.colour = group.colour
         self.orderIndex = group.orderIndex
+        self.parentId = group.parentId
     }
 
     // MARK: - Apply cloud data onto an existing SwiftData model
@@ -37,6 +41,7 @@ struct SyncableServerGroup: Identifiable, Codable {
         group.name = name
         group.colour = colour
         group.orderIndex = orderIndex
+        group.parentId = parentId
     }
 
     // MARK: - Create a new SwiftData model from cloud data
@@ -46,7 +51,8 @@ struct SyncableServerGroup: Identifiable, Codable {
             id: id,
             name: name,
             colour: colour,
-            orderIndex: orderIndex
+            orderIndex: orderIndex,
+            parentId: parentId
         )
     }
 }

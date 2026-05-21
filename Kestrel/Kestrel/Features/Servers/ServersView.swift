@@ -6,6 +6,25 @@
 import SwiftUI
 import SwiftData
 
+/// Fixed hex palette for group-name colours — matches the Windows app so a
+/// colour set on any platform renders identically everywhere.
+private struct GroupColourOption: Identifiable {
+    let name: String
+    let hex: String
+    var id: String { hex }
+}
+
+private let groupColourOptions: [GroupColourOption] = [
+    GroupColourOption(name: "Green", hex: "#00FF41"),
+    GroupColourOption(name: "Blue", hex: "#00C8FF"),
+    GroupColourOption(name: "Purple", hex: "#A78BFA"),
+    GroupColourOption(name: "Amber", hex: "#FFB800"),
+    GroupColourOption(name: "Red", hex: "#FF3B5C"),
+    GroupColourOption(name: "Orange", hex: "#FF8A3D"),
+    GroupColourOption(name: "Teal", hex: "#00E5CC"),
+    GroupColourOption(name: "Grey", hex: "#9AA7B4"),
+]
+
 struct ServersView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SSHServer.orderIndex) private var servers: [SSHServer]
@@ -17,6 +36,7 @@ struct ServersView: View {
     @State private var selectedServerID: UUID?
     @State private var showingDetail = false
     @State private var expandedGroups: Set<String> = []
+    @State private var didSeedExpansion = false
     @State private var connectingServerID: UUID?
     @State private var showingMultiServer = false
     @State private var multiServerPreselected: Set<UUID> = []
@@ -37,6 +57,14 @@ struct ServersView: View {
 
     private var repository: ServerRepository {
         ServerRepository(modelContext: modelContext)
+    }
+
+    /// Resolve a server's group id. Prefers the canonical `groupId`; falls
+    /// back to matching the legacy `group` *name* so pre-id data still groups.
+    private func effectiveGroupId(_ server: SSHServer) -> UUID? {
+        if let gid = server.groupId { return gid }
+        guard let name = server.group, !name.isEmpty else { return nil }
+        return groups.first(where: { $0.name == name })?.id
     }
 
     var body: some View {
@@ -98,12 +126,15 @@ struct ServersView: View {
                 }
             }
             .onAppear {
-                // Auto-expand all groups on first load
-                if expandedGroups.isEmpty {
-                    for group in groups {
-                        expandedGroups.insert(group.name)
-                    }
-                    expandedGroups.insert("__ungrouped__")
+                // On launch, top-level (root) folders are expanded so their
+                // contents are visible, while nested folders start collapsed.
+                // Ungrouped stays expanded so loose servers stay visible.
+                // Seeded once per launch; manual toggles are kept afterwards.
+                guard !didSeedExpansion else { return }
+                didSeedExpansion = true
+                expandedGroups.insert("__ungrouped__")
+                for group in rootGroups {
+                    expandedGroups.insert(group.id.uuidString)
                 }
             }
             .task(id: router.pendingImportHost) {
@@ -154,7 +185,7 @@ struct ServersView: View {
                     groupToDelete = nil
                 }
                 if let group = groupToDelete,
-                   servers.contains(where: { $0.group == group.name }) {
+                   servers.contains(where: { effectiveGroupId($0) == group.id }) {
                     Button("Delete Group & Servers", role: .destructive) {
                         deleteGroup(group, includeServers: true)
                         groupToDelete = nil
@@ -165,7 +196,7 @@ struct ServersView: View {
                 }
             } message: {
                 if let group = groupToDelete {
-                    let count = servers.filter { $0.group == group.name }.count
+                    let count = servers.filter { effectiveGroupId($0) == group.id }.count
                     Text("Delete \"\(group.name)\"? This group has \(count) server\(count == 1 ? "" : "s").")
                 }
             }
@@ -291,139 +322,302 @@ struct ServersView: View {
 
     // MARK: - Server List
 
+    // Groups form a tree (via `parentId`). The list is rendered from a
+    // flattened, depth-tagged walk of that tree so nesting + collapse work
+    // with plain stacks. A collapsed group omits its descendants.
+
+    private enum SidebarRow: Identifiable {
+        case group(ServerGroup, depth: Int)
+        case server(SSHServer, depth: Int)
+        case ungroupedHeader(Int)
+        case ungroupedServer(SSHServer)
+
+        var id: String {
+            switch self {
+            case .group(let g, _): return "group-\(g.id.uuidString)"
+            case .server(let s, _): return "server-\(s.id.uuidString)"
+            case .ungroupedHeader: return "ungrouped-header"
+            case .ungroupedServer(let s): return "ungrouped-\(s.id.uuidString)"
+            }
+        }
+    }
+
+    private func childGroups(of parentId: UUID?) -> [ServerGroup] {
+        groups
+            .filter { $0.parentId == parentId }
+            .sorted { $0.orderIndex < $1.orderIndex }
+    }
+
+    /// Top-level groups — those with no parent, plus any whose `parentId`
+    /// points at a group that no longer exists (so orphans still render).
+    private var rootGroups: [ServerGroup] {
+        let knownIds = Set(groups.map(\.id))
+        return groups
+            .filter { group in
+                guard let parent = group.parentId else { return true }
+                return !knownIds.contains(parent)
+            }
+            .sorted { $0.orderIndex < $1.orderIndex }
+    }
+
+    private func isGroupExpanded(_ group: ServerGroup) -> Bool {
+        expandedGroups.contains(group.id.uuidString)
+    }
+
+    private var sidebarRows: [SidebarRow] {
+        var rows: [SidebarRow] = []
+        func walk(_ group: ServerGroup, depth: Int) {
+            rows.append(.group(group, depth: depth))
+            guard isGroupExpanded(group) else { return }
+            let groupServers = servers
+                .filter { effectiveGroupId($0) == group.id }
+                .sorted { $0.orderIndex < $1.orderIndex }
+            for server in groupServers {
+                rows.append(.server(server, depth: depth + 1))
+            }
+            for child in childGroups(of: group.id) {
+                walk(child, depth: depth + 1)
+            }
+        }
+        for root in rootGroups {
+            walk(root, depth: 0)
+        }
+        let ungrouped = servers
+            .filter { effectiveGroupId($0) == nil }
+            .sorted { $0.orderIndex < $1.orderIndex }
+        if !ungrouped.isEmpty {
+            rows.append(.ungroupedHeader(ungrouped.count))
+            if expandedGroups.contains("__ungrouped__") {
+                for server in ungrouped {
+                    rows.append(.ungroupedServer(server))
+                }
+            }
+        }
+        return rows
+    }
+
     private var serverListSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Grouped servers
-            ForEach(groups) { group in
-                serverGroupSection(group: group)
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(sidebarRows) { row in
+                sidebarRowView(row)
             }
-
-            // Ungrouped servers
-            let ungrouped = servers.filter { $0.group == nil || $0.group?.isEmpty == true }
-            if !ungrouped.isEmpty {
-                ungroupedSection(servers: ungrouped)
-            }
-
-            // Empty state
             if servers.isEmpty {
                 emptyState
             }
         }
     }
 
-    private func serverGroupSection(group: ServerGroup) -> some View {
-        let groupServers = servers.filter { $0.group == group.name }
-        let isExpanded = expandedGroups.contains(group.name)
-
-        return VStack(alignment: .leading, spacing: 8) {
-            // Group header
-            Button {
-                withAnimation(.snappy(duration: 0.25)) {
-                    if isExpanded {
-                        expandedGroups.remove(group.name)
-                    } else {
-                        expandedGroups.insert(group.name)
-                    }
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(KestrelColors.textMuted)
-                        .frame(width: 16)
-
-                    Text(group.name.uppercased())
-                        .font(KestrelFonts.mono(11))
-                        .tracking(1.5)
-                        .foregroundStyle(KestrelColors.textMuted)
-
-                    Capsule()
-                        .fill(KestrelColors.textFaint)
-                        .frame(width: 22, height: 16)
-                        .overlay(
-                            Text("\(groupServers.count)")
-                                .font(KestrelFonts.mono(9))
-                                .foregroundStyle(KestrelColors.textMuted)
-                        )
-
-                    Spacer()
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .contextMenu {
-                Button {
-                    renameGroupName = group.name
-                    groupToRename = group
-                } label: {
-                    Label("Rename", systemImage: "pencil")
-                }
-
-                Button(role: .destructive) {
-                    groupToDelete = group
-                    showingDeleteGroup = true
-                } label: {
-                    Label("Delete Group", systemImage: "trash")
-                }
-            }
-
-            if isExpanded {
-                if groupServers.isEmpty {
-                    emptyGroupCard(groupName: group.name)
-                } else {
-                    ForEach(groupServers) { server in
-                        serverRow(server)
-                    }
-                }
-            }
+    @ViewBuilder
+    private func sidebarRowView(_ row: SidebarRow) -> some View {
+        switch row {
+        case .group(let group, let depth):
+            groupHeaderRow(group, depth: depth)
+        case .server(let server, let depth):
+            serverRow(server)
+                .padding(.leading, CGFloat(depth) * 14)
+                .draggable("server:\(server.id.uuidString)")
+        case .ungroupedHeader(let count):
+            ungroupedHeaderRow(count: count)
+        case .ungroupedServer(let server):
+            serverRow(server)
+                .padding(.leading, 14)
+                .draggable("server:\(server.id.uuidString)")
         }
     }
 
-    private func ungroupedSection(servers: [SSHServer]) -> some View {
-        let isExpanded = expandedGroups.contains("__ungrouped__")
+    private func groupHeaderRow(_ group: ServerGroup, depth: Int) -> some View {
+        let isExpanded = isGroupExpanded(group)
+        let count = servers.filter { effectiveGroupId($0) == group.id }.count
 
-        return VStack(alignment: .leading, spacing: 8) {
+        return Button {
+            withAnimation(.snappy(duration: 0.25)) {
+                if isExpanded {
+                    expandedGroups.remove(group.id.uuidString)
+                } else {
+                    expandedGroups.insert(group.id.uuidString)
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(KestrelColors.textMuted)
+                    .frame(width: 16)
+
+                Text(group.name.uppercased())
+                    .font(KestrelFonts.mono(11))
+                    .tracking(1.5)
+                    .foregroundStyle(Color(hex: group.colour) ?? KestrelColors.textMuted)
+
+                Capsule()
+                    .fill(KestrelColors.textFaint)
+                    .frame(width: 22, height: 16)
+                    .overlay(
+                        Text("\(count)")
+                            .font(KestrelFonts.mono(9))
+                            .foregroundStyle(KestrelColors.textMuted)
+                    )
+
+                Spacer()
+            }
+            .padding(.leading, CGFloat(depth) * 14)
+            .padding(.top, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
             Button {
-                withAnimation(.snappy(duration: 0.25)) {
-                    if isExpanded {
-                        expandedGroups.remove("__ungrouped__")
-                    } else {
-                        expandedGroups.insert("__ungrouped__")
+                renameGroupName = group.name
+                groupToRename = group
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+            // Nesting via menu — reliable regardless of how iOS arbitrates
+            // the long-press between the context menu and the drag gesture.
+            Menu {
+                if group.parentId != nil {
+                    Button {
+                        reparentGroup(group.id, toParentId: nil)
+                    } label: {
+                        Label("Top Level", systemImage: "arrow.up.left")
+                    }
+                }
+                ForEach(candidateParents(for: group)) { other in
+                    Button {
+                        reparentGroup(group.id, toParentId: other.id)
+                    } label: {
+                        Label(other.name, systemImage: "folder")
                     }
                 }
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(KestrelColors.textMuted)
-                        .frame(width: 16)
-
-                    Text("UNGROUPED")
-                        .font(KestrelFonts.mono(11))
-                        .tracking(1.5)
-                        .foregroundStyle(KestrelColors.textMuted)
-
-                    Capsule()
-                        .fill(KestrelColors.textFaint)
-                        .frame(width: 22, height: 16)
-                        .overlay(
-                            Text("\(servers.count)")
-                                .font(KestrelFonts.mono(9))
-                                .foregroundStyle(KestrelColors.textMuted)
-                        )
-
-                    Spacer()
-                }
-                .contentShape(Rectangle())
+                Label("Move Into…", systemImage: "folder.badge.gearshape")
             }
-            .buttonStyle(.plain)
-
-            if isExpanded {
-                ForEach(servers) { server in
-                    serverRow(server)
+            // Group-name colour.
+            Menu {
+                ForEach(groupColourOptions) { opt in
+                    Button {
+                        setGroupColour(group, hex: opt.hex)
+                    } label: {
+                        Label {
+                            Text(opt.name)
+                        } icon: {
+                            Image(systemName: "circle.fill")
+                                .foregroundStyle(Color(hex: opt.hex) ?? .gray)
+                        }
+                    }
                 }
+            } label: {
+                Label("Colour", systemImage: "paintpalette")
+            }
+            Button(role: .destructive) {
+                groupToDelete = group
+                showingDeleteGroup = true
+            } label: {
+                Label("Delete Group", systemImage: "trash")
             }
         }
+        .draggable("group:\(group.id.uuidString)")
+        .dropDestination(for: String.self) { items, _ in
+            handleSidebarDrop(items, ontoGroupId: group.id)
+        }
+    }
+
+    private func ungroupedHeaderRow(count: Int) -> some View {
+        let isExpanded = expandedGroups.contains("__ungrouped__")
+        return Button {
+            withAnimation(.snappy(duration: 0.25)) {
+                if isExpanded {
+                    expandedGroups.remove("__ungrouped__")
+                } else {
+                    expandedGroups.insert("__ungrouped__")
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(KestrelColors.textMuted)
+                    .frame(width: 16)
+
+                Text("UNGROUPED")
+                    .font(KestrelFonts.mono(11))
+                    .tracking(1.5)
+                    .foregroundStyle(KestrelColors.textMuted)
+
+                Capsule()
+                    .fill(KestrelColors.textFaint)
+                    .frame(width: 22, height: 16)
+                    .overlay(
+                        Text("\(count)")
+                            .font(KestrelFonts.mono(9))
+                            .foregroundStyle(KestrelColors.textMuted)
+                    )
+
+                Spacer()
+            }
+            .padding(.top, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // Dropping a group here moves it to the root; a server here ungroups it.
+        .dropDestination(for: String.self) { items, _ in
+            handleSidebarDrop(items, ontoGroupId: nil)
+        }
+    }
+
+    // MARK: - Drag & Drop
+    //
+    // A dragged payload is `server:<uuid>` or `group:<uuid>`. Dropping a
+    // server onto a group joins it; dropping a group onto a group nests it;
+    // dropping either on the Ungrouped header moves it back to the root.
+
+    private func handleSidebarDrop(_ items: [String], ontoGroupId targetGroupId: UUID?) -> Bool {
+        guard let payload = items.first else { return false }
+        if payload.hasPrefix("group:") {
+            guard let gid = UUID(uuidString: String(payload.dropFirst(6))) else { return false }
+            reparentGroup(gid, toParentId: targetGroupId)
+            return true
+        } else if payload.hasPrefix("server:") {
+            guard let sid = UUID(uuidString: String(payload.dropFirst(7))),
+                  let server = servers.first(where: { $0.id == sid }) else { return false }
+            moveServer(server, toGroupId: targetGroupId)
+            return true
+        }
+        return false
+    }
+
+    /// Re-parent a group. Ignores self-drops, no-op moves, and any move that
+    /// would create a cycle (dropping a group onto one of its descendants).
+    private func reparentGroup(_ id: UUID, toParentId newParent: UUID?) {
+        guard let group = groups.first(where: { $0.id == id }) else { return }
+        if id == newParent || group.parentId == newParent { return }
+        if let newParent, isDescendant(newParent, of: id) { return }
+        withAnimation(.snappy) {
+            group.parentId = newParent
+            try? modelContext.save()
+        }
+        Task {
+            try? await SupabaseService.shared.upsertGroup(SyncableServerGroup(from: group))
+        }
+    }
+
+    private func isDescendant(_ candidate: UUID, of ancestor: UUID) -> Bool {
+        var current = groups.first(where: { $0.id == candidate })
+        while let parent = current?.parentId {
+            if parent == ancestor { return true }
+            current = groups.first(where: { $0.id == parent })
+        }
+        return false
+    }
+
+    /// Groups that `group` may be moved into — excludes itself, its current
+    /// parent, and any descendant (which would form a cycle).
+    private func candidateParents(for group: ServerGroup) -> [ServerGroup] {
+        groups
+            .filter { $0.id != group.id }
+            .filter { $0.id != group.parentId }
+            .filter { !isDescendant($0.id, of: group.id) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     // MARK: - Server Row
@@ -511,18 +705,18 @@ struct ServersView: View {
 
         // Move to Group submenu
         Menu {
-            if server.group != nil {
+            if effectiveGroupId(server) != nil {
                 Button {
-                    moveServer(server, toGroup: nil)
+                    moveServer(server, toGroupId: nil)
                 } label: {
                     Label("Ungrouped", systemImage: "minus.circle")
                 }
             }
 
             ForEach(groups) { group in
-                if server.group != group.name {
+                if effectiveGroupId(server) != group.id {
                     Button {
-                        moveServer(server, toGroup: group.name)
+                        moveServer(server, toGroupId: group.id)
                     } label: {
                         Label(group.name, systemImage: "folder")
                     }
@@ -588,31 +782,6 @@ struct ServersView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
-    }
-
-    private func emptyGroupCard(groupName: String) -> some View {
-        HStack {
-            Text("No servers in this group")
-                .font(KestrelFonts.mono(12))
-                .foregroundStyle(KestrelColors.textFaint)
-
-            Spacer()
-
-            Button {
-                showingAddSheet = true
-            } label: {
-                Image(systemName: "plus.circle")
-                    .font(.system(size: 16))
-                    .foregroundStyle(KestrelColors.textMuted)
-            }
-        }
-        .padding(12)
-        .background(KestrelColors.backgroundCard)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(KestrelColors.cardBorder.opacity(0.5), lineWidth: 1)
-        )
     }
 
     // MARK: - Osprey Bridge Card
@@ -773,44 +942,65 @@ struct ServersView: View {
         withAnimation(.snappy) {
             modelContext.insert(group)
             try? modelContext.save()
-            expandedGroups.insert(name)
+            // Expand the freshly created group so the user sees it open.
+            expandedGroups.insert(group.id.uuidString)
         }
     }
 
     private func renameGroup(_ group: ServerGroup, to newName: String) {
         guard !newName.isEmpty else { return }
         let oldName = group.name
-        // Update all servers referencing this group
-        for server in servers where server.group == oldName {
-            server.group = newName
+        // Membership is by id, so the rename touches no servers — except
+        // legacy ones still referencing the old *name*, which are migrated
+        // onto the stable id here so the rename can't orphan them.
+        let supabase = SupabaseService.shared
+        for server in servers where server.groupId == nil && server.group == oldName {
+            server.groupId = group.id
+            server.group = nil
+            server.updatedAt = .now
+            Task { try? await supabase.upsertServer(SyncableServer(from: server)) }
         }
-        // Update expanded groups tracking
-        if expandedGroups.contains(oldName) {
-            expandedGroups.remove(oldName)
-            expandedGroups.insert(newName)
-        }
+        // `expandedGroups` is keyed by group id, so a rename leaves it alone.
         group.name = newName
         try? modelContext.save()
+        Task { try? await supabase.upsertGroup(SyncableServerGroup(from: group)) }
+    }
+
+    /// Set a group's name colour and sync it.
+    private func setGroupColour(_ group: ServerGroup, hex: String) {
+        guard group.colour != hex else { return }
+        group.colour = hex
+        try? modelContext.save()
+        Task {
+            try? await SupabaseService.shared.upsertGroup(SyncableServerGroup(from: group))
+        }
     }
 
     private func deleteGroup(_ group: ServerGroup, includeServers: Bool) {
         let supabase = SupabaseService.shared
         withAnimation(.snappy) {
+            let members = servers.filter { effectiveGroupId($0) == group.id }
             if includeServers {
-                for server in servers where server.group == group.name {
+                for server in members {
                     sessionManager.closeSession(serverID: server.id)
                     let syncable = SyncableServer(from: server)
                     modelContext.delete(server)
                     Task { try? await supabase.deleteServer(syncable) }
                 }
             } else {
-                for server in servers where server.group == group.name {
+                for server in members {
+                    server.groupId = nil
                     server.group = nil
                     server.updatedAt = .now
                     Task { try? await supabase.upsertServer(SyncableServer(from: server)) }
                 }
             }
-            expandedGroups.remove(group.name)
+            expandedGroups.remove(group.id.uuidString)
+            // Lift any child groups up to the root so they aren't orphaned.
+            for child in groups where child.parentId == group.id {
+                child.parentId = nil
+                Task { try? await supabase.upsertGroup(SyncableServerGroup(from: child)) }
+            }
             let syncableGroup = SyncableServerGroup(from: group)
             modelContext.delete(group)
             try? modelContext.save()
@@ -818,10 +1008,15 @@ struct ServersView: View {
         }
     }
 
-    private func moveServer(_ server: SSHServer, toGroup groupName: String?) {
+    private func moveServer(_ server: SSHServer, toGroupId groupId: UUID?) {
         withAnimation(.snappy) {
-            server.group = groupName
+            server.groupId = groupId
+            server.group = nil
+            server.updatedAt = .now
             try? modelContext.save()
+            Task {
+                try? await SupabaseService.shared.upsertServer(SyncableServer(from: server))
+            }
         }
     }
 
@@ -833,6 +1028,7 @@ struct ServersView: View {
             username: server.username,
             authMethod: server.authMethod,
             privateKeyID: server.privateKeyID,
+            groupId: server.groupId,
             group: server.group,
             environment: server.environment,
             colour: server.colour,

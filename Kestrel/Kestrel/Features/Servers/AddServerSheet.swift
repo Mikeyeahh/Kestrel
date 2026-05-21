@@ -43,7 +43,7 @@ struct AddServerSheet: View {
     @State private var password = ""
     @State private var selectedKeyID: UUID?
     @State private var environment: ServerEnvironment = .other
-    @State private var selectedGroup: String?
+    @State private var selectedGroupId: UUID?
     @State private var newGroupName = ""
     @State private var showingNewGroup = false
 
@@ -127,7 +127,14 @@ struct AddServerSheet: View {
             authMethod = server.authMethod
             selectedKeyID = server.privateKeyID
             environment = server.environment
-            selectedGroup = server.group
+            // Resolve membership by id, falling back to the legacy name.
+            if let gid = server.groupId {
+                selectedGroupId = gid
+            } else if let name = server.group, !name.isEmpty {
+                selectedGroupId = groups.first(where: { $0.name == name })?.id
+            } else {
+                selectedGroupId = nil
+            }
             useMosh = server.useMosh
             vncPort = String(server.vncPort ?? 5900)
             rdpPort = String(server.rdpPort ?? 3389)
@@ -477,9 +484,9 @@ struct AddServerSheet: View {
                 VStack(spacing: 6) {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
-                            groupChip(name: nil, label: "None")
+                            groupChip(id: nil, label: "None")
                             ForEach(groups) { group in
-                                groupChip(name: group.name, label: group.name)
+                                groupChip(id: group.id, label: group.name)
                             }
                             Button {
                                 showingNewGroup.toggle()
@@ -523,11 +530,11 @@ struct AddServerSheet: View {
         }
     }
 
-    private func groupChip(name: String?, label: String) -> some View {
-        let isSelected = selectedGroup == name
+    private func groupChip(id: UUID?, label: String) -> some View {
+        let isSelected = selectedGroupId == id
 
         return Button {
-            selectedGroup = name
+            selectedGroupId = id
         } label: {
             Text(label)
                 .font(KestrelFonts.mono(11))
@@ -671,7 +678,8 @@ struct AddServerSheet: View {
             server.username = effectiveUsername
             server.authMethod = effectiveAuthMethod
             server.privateKeyID = (connectionProtocol == .ssh && authMethod == .privateKey) ? selectedKeyID : nil
-            server.group = selectedGroup
+            server.groupId = selectedGroupId
+            server.group = nil
             server.environment = environment
             server.useMosh = connectionProtocol == .ssh ? useMosh : false
             server.vncPort = connectionProtocol == .vnc ? vncPortNum : nil
@@ -688,7 +696,7 @@ struct AddServerSheet: View {
                 username: effectiveUsername,
                 authMethod: effectiveAuthMethod,
                 privateKeyID: (connectionProtocol == .ssh && authMethod == .privateKey) ? selectedKeyID : nil,
-                group: selectedGroup,
+                groupId: selectedGroupId,
                 environment: environment,
                 connectionType: connectionProtocol.rawValue,
                 useMosh: connectionProtocol == .ssh ? useMosh : false,
@@ -781,7 +789,7 @@ struct AddServerSheet: View {
         modelContext.insert(group)
         try? modelContext.save()
 
-        selectedGroup = newGroupName
+        selectedGroupId = group.id
         newGroupName = ""
         showingNewGroup = false
     }

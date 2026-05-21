@@ -36,3 +36,29 @@ enum KestrelColors {
     static var textMuted: Color { theme.textMuted }
     static var textFaint: Color { theme.textFaint }
 }
+
+// MARK: - Hex Color
+
+extension Color {
+    /// Initialise a Color from a `#RRGGBB` or `#RRGGBBAA` hex string.
+    /// Returns nil for malformed input (e.g. legacy `var(--…)` values).
+    init?(hex: String) {
+        var s = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.hasPrefix("#") { s.removeFirst() }
+        guard s.count == 6 || s.count == 8,
+              let value = UInt64(s, radix: 16) else { return nil }
+        let r, g, b, a: Double
+        if s.count == 6 {
+            r = Double((value >> 16) & 0xFF) / 255
+            g = Double((value >> 8) & 0xFF) / 255
+            b = Double(value & 0xFF) / 255
+            a = 1
+        } else {
+            r = Double((value >> 24) & 0xFF) / 255
+            g = Double((value >> 16) & 0xFF) / 255
+            b = Double((value >> 8) & 0xFF) / 255
+            a = Double(value & 0xFF) / 255
+        }
+        self = Color(.sRGB, red: r, green: g, blue: b, opacity: a)
+    }
+}

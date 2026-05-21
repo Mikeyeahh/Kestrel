@@ -16,6 +16,11 @@ final class SSHServer {
     var authMethod: AuthMethod = AuthMethod.password
     var privateKeyID: UUID?
     var jumpHostID: UUID?
+    /// Canonical group membership — the owning `ServerGroup.id`. Stable
+    /// across group renames. `nil` means the server is ungrouped.
+    var groupId: UUID?
+    /// Legacy group *name*. Kept only so older data still resolves; new
+    /// code groups by `groupId`.
     var group: String?
     var environment: ServerEnvironment = ServerEnvironment.other
     var colour: String = "#00FF9C"
@@ -38,6 +43,7 @@ final class SSHServer {
         authMethod: AuthMethod = .password,
         privateKeyID: UUID? = nil,
         jumpHostID: UUID? = nil,
+        groupId: UUID? = nil,
         group: String? = nil,
         environment: ServerEnvironment = .other,
         colour: String = "#00FF9C",
@@ -59,6 +65,7 @@ final class SSHServer {
         self.authMethod = authMethod
         self.privateKeyID = privateKeyID
         self.jumpHostID = jumpHostID
+        self.groupId = groupId
         self.group = group
         self.environment = environment
         self.colour = colour

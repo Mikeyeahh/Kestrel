@@ -176,12 +176,26 @@ struct RootView: View {
 
     @AppStorage("settings.requireBiometric") private var requireBiometric = false
     @AppStorage("app.theme") private var themeID = "Phosphor"
+    @AppStorage("onboarding.completed") private var onboardingCompleted = false
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var supabaseService: SupabaseService
 
     var body: some View {
         ZStack {
             ContentView()
+
+            // Registration is required to use the app: the welcome overlay
+            // stays up until the user has *both* completed onboarding once
+            // and has an active authenticated Supabase session.
+            if !onboardingCompleted || !supabaseService.isAuthenticated {
+                WelcomeView {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        onboardingCompleted = true
+                    }
+                }
+                .transition(.opacity)
+                .zIndex(1)
+            }
 
             if isLocked {
                 BiometricLockView {

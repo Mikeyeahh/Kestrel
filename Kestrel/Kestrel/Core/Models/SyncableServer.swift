@@ -18,6 +18,9 @@ struct SyncableServer: Identifiable, Codable {
     var username: String
     var authMethod: String
     var privateKeyID: UUID?
+    /// Canonical group membership — the owning group's id.
+    var groupId: UUID?
+    /// Legacy group *name*; kept for older data.
     var group: String?
     var environment: String
     var colour: String
@@ -36,6 +39,7 @@ struct SyncableServer: Identifiable, Codable {
         case name, host, port, username
         case authMethod = "auth_method"
         case privateKeyID = "private_key_id"
+        case groupId = "group_id"
         case group, environment, colour, tags
         case orderIndex = "order_index"
         case notes
@@ -58,6 +62,7 @@ struct SyncableServer: Identifiable, Codable {
         username = try container.decode(String.self, forKey: .username)
         authMethod = try container.decodeIfPresent(String.self, forKey: .authMethod) ?? "password"
         privateKeyID = try container.decodeIfPresent(UUID.self, forKey: .privateKeyID)
+        groupId = try container.decodeIfPresent(UUID.self, forKey: .groupId)
         group = try container.decodeIfPresent(String.self, forKey: .group)
         environment = try container.decodeIfPresent(String.self, forKey: .environment) ?? "other"
         colour = try container.decodeIfPresent(String.self, forKey: .colour) ?? "#00FF9C"
@@ -81,6 +86,7 @@ struct SyncableServer: Identifiable, Codable {
         self.username = server.username
         self.authMethod = server.authMethod.rawValue
         self.privateKeyID = server.privateKeyID
+        self.groupId = server.groupId
         self.group = server.group
         self.environment = server.environment.rawValue
         self.colour = server.colour
@@ -103,6 +109,7 @@ struct SyncableServer: Identifiable, Codable {
         server.username = username
         server.authMethod = AuthMethod(rawValue: authMethod) ?? .password
         server.privateKeyID = privateKeyID
+        server.groupId = groupId
         server.group = group
         server.environment = ServerEnvironment(rawValue: environment) ?? .other
         server.colour = colour
@@ -127,6 +134,7 @@ struct SyncableServer: Identifiable, Codable {
             username: username,
             authMethod: AuthMethod(rawValue: authMethod) ?? .password,
             privateKeyID: privateKeyID,
+            groupId: groupId,
             group: group,
             environment: ServerEnvironment(rawValue: environment) ?? .other,
             colour: colour,
