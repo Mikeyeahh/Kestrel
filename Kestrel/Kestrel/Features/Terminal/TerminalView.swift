@@ -28,6 +28,10 @@ struct TerminalView: View {
     // Swipe gesture
     @State private var dragOffset: CGFloat = 0
 
+    // Restore the last terminal session once per launch (auto-reconnect).
+    @State private var didAttemptRestore = false
+    private static let lastServerKey = "terminal.lastServerID"
+
     private var activeTab: TerminalTab? {
         tabs.first { $0.id == activeTabID }
     }
@@ -100,7 +104,10 @@ struct TerminalView: View {
                 Text("Disconnect from \(tab.server.name)?")
             }
         }
-        .onAppear { consumePendingTerminal() }
+        .onAppear {
+            consumePendingTerminal()
+            restoreLastTerminalIfNeeded()
+        }
         .onChange(of: router.pendingTerminalServer?.id) { _, _ in consumePendingTerminal() }
         .onChange(of: router.pendingAIOverlay) { _, pending in
             if pending {
@@ -155,6 +162,7 @@ struct TerminalView: View {
                         proxy.scrollTo(newID, anchor: .center)
                     }
                 }
+                persistLastTerminal()
             }
         }
     }
@@ -342,6 +350,29 @@ struct TerminalView: View {
         let tab = TerminalTab(server: server)
         tabs.append(tab)
         activeTabID = tab.id
+    }
+
+    /// Remember the active terminal's server so we can reopen it on the next
+    /// launch; clear it once no tabs remain.
+    private func persistLastTerminal() {
+        if let server = activeTab?.server {
+            UserDefaults.standard.set(server.id.uuidString, forKey: Self.lastServerKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.lastServerKey)
+        }
+    }
+
+    /// On the first appearance after a cold launch, reopen the last terminal
+    /// server (which reconnects via `SSHTerminalContainer`) so a relaunch
+    /// feels continuous. Runs at most once and only when no tabs are open.
+    private func restoreLastTerminalIfNeeded() {
+        guard !didAttemptRestore else { return }
+        didAttemptRestore = true
+        guard tabs.isEmpty,
+              let idString = UserDefaults.standard.string(forKey: Self.lastServerKey),
+              let id = UUID(uuidString: idString),
+              let server = servers.first(where: { $0.id == id }) else { return }
+        openTab(for: server)
     }
 
     private func closeTab(_ tab: TerminalTab) {

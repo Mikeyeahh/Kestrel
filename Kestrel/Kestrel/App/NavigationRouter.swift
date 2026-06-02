@@ -24,7 +24,12 @@ enum KestrelTab: Int, Hashable {
 final class NavigationRouter {
     static let shared = NavigationRouter()
 
-    var selectedTab: KestrelTab = .servers
+    private static let selectedTabKey = "nav.selectedTab"
+
+    /// Persisted so a cold relaunch reopens the tab the user left on.
+    var selectedTab: KestrelTab = .servers {
+        didSet { UserDefaults.standard.set(selectedTab.rawValue, forKey: Self.selectedTabKey) }
+    }
 
     // Servers tab
     var selectedServerID: UUID?
@@ -49,7 +54,14 @@ final class NavigationRouter {
     var showingKeyManager = false
     var showingPaywall = false
 
-    private init() {}
+    private init() {
+        // Restore the last-used tab. (Property observers don't fire during
+        // init, so this read-back doesn't re-persist.)
+        if let raw = UserDefaults.standard.object(forKey: Self.selectedTabKey) as? Int,
+           let tab = KestrelTab(rawValue: raw) {
+            selectedTab = tab
+        }
+    }
 
     /// Called when a server is connected from the Servers tab.
     /// Signals terminal and SFTP to auto-connect.

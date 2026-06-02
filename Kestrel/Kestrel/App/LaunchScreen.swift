@@ -204,9 +204,18 @@ final class BackgroundGraceManager {
     }
 }
 
+/// Set once the animated launch screen has played. After that we skip the
+/// intro so returning from another app (a cold relaunch) jumps straight to
+/// content instead of replaying the 2.9s animation.
+private let kLaunchAnimationShownKey = "launch.animationShown"
+
 struct RootView: View {
-    @State private var showingLaunch = true
-    @State private var isLocked = false
+    // Show the launch animation only the first time the app is opened.
+    @State private var showingLaunch = !UserDefaults.standard.bool(forKey: kLaunchAnimationShownKey)
+    // If we're skipping the animation, arm the biometric gate up front
+    // (normally it's armed when the animation finishes).
+    @State private var isLocked = UserDefaults.standard.bool(forKey: kLaunchAnimationShownKey)
+        && UserDefaults.standard.bool(forKey: "settings.requireBiometric")
     @State private var router = NavigationRouter.shared
     @State private var ospreyBridge = OspreyBridgeService.shared
 
@@ -249,6 +258,8 @@ struct RootView: View {
                     .zIndex(3)
                     .onAppear {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2.9) {
+                            // Remember we've shown it, so later launches skip it.
+                            UserDefaults.standard.set(true, forKey: kLaunchAnimationShownKey)
                             withAnimation(.easeOut(duration: 0.3)) {
                                 showingLaunch = false
                             }
