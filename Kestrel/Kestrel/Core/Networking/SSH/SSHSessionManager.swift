@@ -99,6 +99,10 @@ final class SSHSessionManager {
             // Update server's lastConnected timestamp
             server.lastConnected = .now
 
+            // A successful connection is a positive moment — count it toward
+            // possibly asking the user for an App Store review.
+            AppReviewManager.shared.recordMilestone()
+
             return session
         } catch {
             // Remove session on failure
