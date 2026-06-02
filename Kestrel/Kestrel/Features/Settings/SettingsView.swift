@@ -774,7 +774,7 @@ struct SettingsView: View {
                 }
             }
 
-            Link(destination: URL(string: "https://apps.apple.com/app/id0000000000?action=write-review")!) {
+            Link(destination: URL(string: "https://apps.apple.com/app/id6764020106?action=write-review")!) {
                 settingsActionRow(icon: "star", text: "Rate Kestrel on App Store", color: KestrelColors.amber)
             }
 
