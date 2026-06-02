@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import StoreKit
+import Combine
 
 /// Shared App Group container for credential sharing with OSPREY.
 let kestrelAppGroup = "group.com.getosprey.suite"
