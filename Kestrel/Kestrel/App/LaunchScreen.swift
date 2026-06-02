@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import LocalAuthentication
+import UIKit
 
 // MARK: - Launch Screen View
 
@@ -168,6 +169,41 @@ struct RootSyncWrapper: View {
     }
 }
 
+// MARK: - Background Grace
+
+/// Requests a short background-execution window when the app leaves the
+/// foreground, so a quick app-switch doesn't immediately suspend Kestrel and
+/// drop live SSH sessions. iOS grants roughly 30 seconds; the assertion is
+/// released as soon as we return to the foreground or the window expires.
+///
+/// This does not — and on iOS cannot — keep the app running indefinitely in
+/// the background; it only smooths over brief excursions to other apps.
+@MainActor
+final class BackgroundGraceManager {
+    static let shared = BackgroundGraceManager()
+
+    private var taskID: UIBackgroundTaskIdentifier = .invalid
+
+    private init() {}
+
+    /// Begin (or renew) the background-time assertion.
+    func begin() {
+        endIfNeeded()
+        taskID = UIApplication.shared.beginBackgroundTask(withName: "kestrel.grace") { [weak self] in
+            // iOS calls this when the window is about to expire. We must end
+            // the task here or the OS terminates the app.
+            self?.endIfNeeded()
+        }
+    }
+
+    /// Release the assertion if one is held.
+    func endIfNeeded() {
+        guard taskID != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(taskID)
+        taskID = .invalid
+    }
+}
+
 struct RootView: View {
     @State private var showingLaunch = true
     @State private var isLocked = false
@@ -231,8 +267,18 @@ struct RootView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background && requireBiometric {
-                isLocked = true
+            switch phase {
+            case .background:
+                // Ask iOS for a short grace window so a quick app-switch
+                // doesn't suspend Kestrel (and drop live SSH sessions) the
+                // instant we leave the foreground.
+                BackgroundGraceManager.shared.begin()
+                if requireBiometric { isLocked = true }
+            case .active:
+                // Back in the foreground — release the assertion.
+                BackgroundGraceManager.shared.endIfNeeded()
+            default:
+                break
             }
         }
         .onOpenURL { url in
