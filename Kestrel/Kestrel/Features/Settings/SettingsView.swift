@@ -57,6 +57,7 @@ struct SettingsView: View {
     @State private var showingClearSharedData = false
 
     @AppStorage("app.theme") private var selectedTheme = "Phosphor"
+    @AppStorage("app.font") private var selectedFont = "jetbrains-mono"
 
     var body: some View {
         NavigationStack {
@@ -64,6 +65,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     proStatusCard
                     appearanceSection
+                    fontSection
                     cloudSyncSection
                     generalSection
                     terminalSection
@@ -260,6 +262,56 @@ struct SettingsView: View {
                                     .font(KestrelFonts.mono(10))
                                     .foregroundStyle(
                                         selectedTheme == themeID.rawValue
+                                            ? KestrelColors.textPrimary
+                                            : KestrelColors.textMuted
+                                    )
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 8)
+            }
+        }
+    }
+
+    // MARK: - App Font
+
+    private var fontSection: some View {
+        settingsSection("App Font") {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(AppFontID.allCases) { fontID in
+                        Button {
+                            selectedFont = fontID.rawValue
+                            FontManager.shared.currentFontID = fontID
+                            // Sync the choice so it follows the user to Mac/Windows.
+                            Task { await SupabaseService.shared.saveUserSettings(uiFont: fontID.rawValue) }
+                        } label: {
+                            VStack(spacing: 8) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(KestrelColors.backgroundCard)
+                                        .frame(width: 64, height: 48)
+                                    Text("Ag")
+                                        .font(KestrelFonts.fontForID(fontID, size: 22, weight: .semibold))
+                                        .foregroundStyle(KestrelColors.textPrimary)
+                                }
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .strokeBorder(
+                                            selectedFont == fontID.rawValue
+                                                ? KestrelColors.phosphorGreen
+                                                : KestrelColors.cardBorder,
+                                            lineWidth: selectedFont == fontID.rawValue ? 2 : 1
+                                        )
+                                )
+
+                                Text(fontID.label)
+                                    .font(KestrelFonts.mono(10))
+                                    .foregroundStyle(
+                                        selectedFont == fontID.rawValue
                                             ? KestrelColors.textPrimary
                                             : KestrelColors.textMuted
                                     )
