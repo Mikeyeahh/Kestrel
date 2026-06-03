@@ -126,11 +126,18 @@ final class KestrelRevenueCatService {
     // MARK: - Computed
 
     var isProOrBundle: Bool {
-        isPro || hasSuiteBundle || proOverride || isDeveloper
+        isPro || hasSuiteBundle || proOverride || isDeveloper || cloudPro
     }
 
     /// True when the signed-in user matches a developer email.
     private(set) var isDeveloper: Bool = false
+
+    /// Pro entitlement read from the Supabase `subscriptions` table — the
+    /// service-role-written source of truth shared with the Mac and Windows
+    /// apps. This is how Pro bought on ANY platform shows here, including
+    /// RevenueCat Web Billing purchases that the native SDK's `customerInfo`
+    /// never reports. Set by `SupabaseService` after auth / on sign-out.
+    var cloudPro: Bool = false
 
     // MARK: - Init
 
@@ -176,6 +183,30 @@ final class KestrelRevenueCatService {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Links the RevenueCat SDK to the Supabase user id (`app_user_id`) so its
+    /// `customerInfo` reflects this account's purchases across every device, and
+    /// so native purchases attribute to the right customer / `subscriptions`
+    /// row. Guarded on `isConfigured` so an early call during launch (before
+    /// `configure`) can't crash.
+    func identify(appUserID: String) async {
+        guard Purchases.isConfigured else { return }
+        do {
+            let result = try await Purchases.shared.logIn(appUserID)
+            updateEntitlements(from: result.customerInfo)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Resets the RevenueCat SDK to a fresh anonymous user on sign-out so the
+    /// next account can't inherit this one's entitlements.
+    func signOutOfRevenueCat() async {
+        isPro = false
+        hasSuiteBundle = false
+        guard Purchases.isConfigured else { return }
+        _ = try? await Purchases.shared.logOut()
     }
 
     func updateEntitlements(from customerInfo: CustomerInfo) {
