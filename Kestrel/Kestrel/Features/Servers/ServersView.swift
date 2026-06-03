@@ -98,11 +98,18 @@ struct ServersView: View {
                 }
             }
             .sheet(isPresented: $showingAddSheet) {
-                AddServerSheet(editing: serverToEdit, prefillHost: importPrefillHost)
+                AddServerSheet(prefillHost: importPrefillHost)
                     .onDisappear {
-                        serverToEdit = nil
                         importPrefillHost = nil
                     }
+            }
+            // Edit uses item-based presentation so the selected server is
+            // guaranteed to be set when the sheet first builds. Presenting edit
+            // through the `showingAddSheet` bool let SwiftUI build the sheet
+            // before `serverToEdit` had propagated, so the form opened empty the
+            // first time and only filled in on a second open.
+            .sheet(item: $serverToEdit) { server in
+                AddServerSheet(editing: server)
             }
             .sheet(isPresented: $showingPaywall) {
                 KestrelPaywallView()
@@ -727,8 +734,8 @@ struct ServersView: View {
         }
 
         Button {
+            // Setting the item presents the edit sheet; no bool needed.
             serverToEdit = server
-            showingAddSheet = true
         } label: {
             Label("Edit", systemImage: "pencil")
         }
