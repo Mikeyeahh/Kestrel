@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import PostHog
 
 // MARK: - SFTP View (Root)
 
@@ -32,7 +33,9 @@ struct SFTPView: View {
             VStack(spacing: 0) {
                 if let session {
                     if session.isConnected {
+                        // Mask file names and contents from session replay.
                         fileBrowser(session: session)
+                            .postHogMask()
                     } else if session.isLoading {
                         connectingState(serverName: session.serverName)
                     } else if let error = session.error {

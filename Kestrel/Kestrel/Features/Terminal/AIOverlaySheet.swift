@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import PostHog
 
 struct AIOverlaySheet: View {
     let tab: TerminalTab
@@ -126,6 +127,8 @@ struct AIOverlaySheet: View {
                     .foregroundStyle(KestrelColors.phosphorGreen.opacity(0.7))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            // Terminal transcript excerpt — mask from session replay.
+            .postHogMask()
             .frame(maxHeight: 120)
             .padding(10)
             .background(KestrelColors.background)

@@ -9,6 +9,7 @@
 import SwiftUI
 import SwiftData
 import SwiftTerm
+import PostHog
 
 // MARK: - SSH Terminal Container (SwiftUI → UIKit Bridge)
 
@@ -65,6 +66,9 @@ struct SSHTerminalContainer: View {
                 }
             )
             .gesture(pinchToZoomGesture)
+            // Mask live terminal output from PostHog session replay — it can
+            // contain command output, secrets and credentials.
+            .postHogMask()
 
             // Custom keyboard toolbar (only visible when keyboard is up)
             TerminalKeyboardToolbar(
